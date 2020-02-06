@@ -5,6 +5,8 @@ drop table if exists FORMATION;
 drop table if exists ENSEIGNANT;
 drop table if exists ETUDIANT;
 drop function if exists moyNote();
+drop function if exists Moy_format();
+drop function if exists moy_eleve(v_nomform varchar(30));
 
 create table ETUDIANT (
 	NumEt	int,
@@ -94,6 +96,7 @@ select * from matiere;
 select * from tabnote;
 select * from stat_resultat;
 
+--2--
 
 CREATE
 	FUNCTION moyNote() 
@@ -102,13 +105,22 @@ CREATE
 		$$
 		
 			DECLARE curseur CURSOR FOR
-					SELECT Nommat, nomForm, coef, Nom FROM MATIERE NATURAL JOIN TabNOTE NATURAL JOIN ETUDIANT;
+					SELECT Nommat, Note, coef FROM MATIERE NATURAL JOIN TabNOTE NATURAL JOIN ETUDIANT;
+					v_numerateur TabNOTE.Note %TYPE;
+					v_denominateur TabNOTE.Note %TYPE;
+					v_notemoy TabNOTE.Note %TYPE;
 			BEGIN	
+					v_numerateur = 0;
+					v_denominateur = 0;
+					v_notemoy = 0;
 					FOR i IN curseur
 					LOOP
-						RAISE NOTICE 'la nom est de : %', i.Nom;
-						
+						v_numerateur := (i.Note * i.coef) + v_numerateur;
+						v_denominateur := i.coef + v_denominateur;					
 					END LOOP;
+					v_notemoy = v_numerateur / v_denominateur;
+					RAISE NOTICE 'la moyenne des étudiants est de : %', v_notemoy;				
+					return v_notemoy;	
 			END;		
 		
 		$$ LANGUAGE plpgsql;
@@ -118,14 +130,82 @@ SELECT moyNote();
 
 
 
+--3--
+
+SELECT e.nom, e.prenom, e.numet, t.num_etud, t.note FROM ETUDIANT e JOIN TabNOTE t ON e.numet = t.num_etud WHERE t.Note > moyNote();
 
 
+--4--
+
+CREATE
+	FUNCTION Moy_format(v_nomform varchar(30))
+		RETURNS float
+			AS
+		$$
+			
+			DECLARE curseur CURSOR FOR
+					SELECT t.Note, t.nomform, t.Nommat, m.coef FROM TabNOTE t NATURAL JOIN MATIERE m WHERE v_nomform = t.nomForm;
+					v_numerateur TabNOTE.Note %TYPE;
+					v_denominateur TabNOTE.Note %TYPE;
+					v_notemoy TabNOTE.Note %TYPE;				
+			BEGIN
+					v_numerateur = 0;
+					v_denominateur = 0;
+					v_notemoy = 0;
+					
+					FOR i IN curseur
+					LOOP
+						v_numerateur := (i.Note * i.coef) + v_numerateur;
+						v_denominateur := (i.coef) + v_denominateur;
+					END LOOP;
+					v_notemoy = v_numerateur / v_denominateur;	
+					RAISE NOTICE 'la moyenne de la formation % est de : %', v_nomform, v_notemoy;	
+					return v_notemoy;	
+			END;
+		
+		$$ LANGUAGE plpgsql;
+
+SELECT Moy_format('NBA');
+SELECT Moy_format('WNBA');
 
 
+--5--
 
+CREATE
+	FUNCTION moy_eleve(v_nomform varchar(30))
+		RETURNS int
+			AS
+		$$
+			
+			DECLARE curseur CURSOR FOR
+					SELECT t.Note, t.nomform, t.Nommat, coef, numet, nom, prenom FROM TabNOTE t NATURAL JOIN MATIERE  NATURAL JOIN ETUDIANT  WHERE v_nomform = t.nomForm;
+					v_numerateur TabNOTE.Note %TYPE;
+					v_denominateur TabNOTE.Note %TYPE;
+					v_notemoy TabNOTE.Note %TYPE;
+					v_nbrRecu STAT_RESULTAT.nbrRecu %TYPE;				
+			BEGIN
+					v_numerateur = 0;
+					v_denominateur = 0;
+					v_notemoy = 0;
+					v_nbrRecu = 0;
+					FOR i IN curseur
+					LOOP
+						v_numerateur := (i.Note * i.coef) + v_numerateur;
+						v_denominateur := (i.coef) + v_denominateur;
+						v_notemoy = v_numerateur / v_denominateur;	
+						IF(v_notemoy >= 10)
+							THEN v_nbrRecu := v_nbrRecu +1;
+						END IF;
+					RAISE NOTICE 'moyenne de % % est de %', nom, prenom, v_notemoy;			
+					END LOOP;
+					RAISE NOTICE 'le nombre de reçu est de : %', v_nbrRecu;												
+					return v_nbrRecu;	
+			END;
+		
+		$$ LANGUAGE plpgsql;
+			
 
-
-
+SELECT moy_eleve('NBA');
 
 
 
