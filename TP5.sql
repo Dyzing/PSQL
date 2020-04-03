@@ -1,3 +1,5 @@
+drop function if exists pas_plus_de_3 cascade;
+
 drop function if exists liste_actionnaires_salaries cascade;
 
 drop function if exists nb_salaries_jamais_action_2 cascade;
@@ -141,7 +143,7 @@ BEGIN
 -- bRAISE NOTICE ' NbrActTotal  %', (select NbrActTotal from HISTO_An_ACTIONNAIRE t where ((t.PERSONNE).NumSecu = (New.PERSONNE).NumSecu) and ((t.SOCIETE).CodeSoc = (New.SOCIETE).CodeSoc)  and (SELECT EXTRACT(YEAR FROM New.dateAct) = t.Annee));
 
 if New.typeAct='achat'
-then RAISE NOTICE 'action achat comptabilisée';
+then RAISE NOTICE 'action achat comptabilisée de %.', (New.PERSONNE).Prenom;
 
 	IF (select NbrActTotal from HISTO_An_ACTIONNAIRE t where ((t.PERSONNE).NumSecu = (New.PERSONNE).NumSecu) and ((t.SOCIETE).CodeSoc = (New.SOCIETE).CodeSoc) and (SELECT EXTRACT(YEAR FROM New.dateAct) = t.Annee)) IS NULL
 	THEN insert into HISTO_An_ACTIONNAIRE values ((select p from PERSONNE p where p.NumSecu = (New.PERSONNE).NumSecu), (select s from SOCIETE s where s.CodeSoc = (New.SOCIETE).CodeSoc), (SELECT EXTRACT(YEAR FROM New.dateAct)), New.NbrAct, New.NbrAct,0);
@@ -156,7 +158,7 @@ then RAISE NOTICE 'action achat comptabilisée';
 										WHERE (((PERSONNE).NumSecu = (New.PERSONNE).NumSecu) and ((SOCIETE).CodeSoc = (New.SOCIETE).CodeSoc));
 	END IF;
 elseif New.typeAct='vente'
-then RAISE NOTICE 'action vente comptabilisée';
+then RAISE NOTICE 'action vente comptabilisée de %.', (New.PERSONNE).Prenom;
 
 	IF (select NbrActTotal from HISTO_An_ACTIONNAIRE t where ((t.PERSONNE).NumSecu = (New.PERSONNE).NumSecu) and ((t.SOCIETE).CodeSoc = (New.SOCIETE).CodeSoc) and (SELECT EXTRACT(YEAR FROM New.dateAct) = t.Annee) ) IS NULL
 	THEN insert into HISTO_An_ACTIONNAIRE values ((select p from PERSONNE p where p.NumSecu = (New.PERSONNE).NumSecu), (select s from SOCIETE s where s.CodeSoc = (New.SOCIETE).CodeSoc), (SELECT EXTRACT(YEAR FROM New.dateAct)), New.NbrAct, 0,New.NbrAct);
@@ -202,7 +204,7 @@ BEGIN
 IF current_date > New.dateAct 
 THEN
 		RAISE NOTICE 'current_date :  %, date insérée :  %', current_date, New.dateAct;
-		RAISE EXCEPTION 'Action en dessous de la date --> action non comptabilisée.';
+		RAISE EXCEPTION 'Action en dessous de la date --> action non comptabilisée de %.', (New.PERSONNE).Prenom;
 END IF;
 RETURN NEW;
 END;
@@ -250,13 +252,59 @@ $$ LANGUAGE 'plpgsql';
 
 create function liste_actionnaires_salaries() RETURNS TABLE(nomSoc varchar(30), Annee int) AS $$ 
 BEGIN
-	RETURN QUERY (SELECT (s.SOCIETE).NomSoc, h.Annee from HISTO_An_ACTIONNAIRE h INNER JOIN SALARIE s on (h.SOCIETE = s.SOCIETE and h.PERSONNE = s.PERSONNE));
+	RETURN QUERY (SELECT DISTINCT (s.SOCIETE).NomSoc, h.Annee from HISTO_An_ACTIONNAIRE h INNER JOIN SALARIE s on (h.SOCIETE = s.SOCIETE and h.PERSONNE = s.PERSONNE));
 END;
 $$ LANGUAGE 'plpgsql';
 
 
 
 
+
+
+-- question 8
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- question 10
+
+
+
+
+CREATE FUNCTION pas_plus_de_3() RETURNS TRIGGER AS $$
+DECLARE
+temp_nb_actions_dans_annee	int;
+temp_annee_new int;
+BEGIN
+temp_annee_new := (SELECT EXTRACT(YEAR FROM New.dateAct));
+temp_nb_actions_dans_annee := (select COUNT(a.dateAct) FROM ACTION a WHERE ( ((New.PERSONNE).NumSecu = (a.PERSONNE).NumSecu) and (SELECT EXTRACT(YEAR FROM a.dateAct) = temp_annee_new) ) );
+IF  temp_nb_actions_dans_annee >= 3
+THEN
+		RAISE EXCEPTION 'Il y a au moins trois actions de réalisées dans cette annee. Action non comptabilisée de %.', (New.PERSONNE).Prenom;
+END IF;
+RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+
+create trigger pas_plus_de_3_trigger 
+		BEFORE INSERT
+ON ACTION
+FOR EACH ROW execute procedure pas_plus_de_3();
 
 
 
@@ -268,6 +316,7 @@ $$ LANGUAGE 'plpgsql';
  insert into ACTION values ((select p from PERSONNE p where Prenom='Tom'), (select s from SOCIETE s where NomSoc='Mairie'), '2020-05-01', 2, 'vente');
  insert into ACTION values ((select p from PERSONNE p where Prenom='Tom'), (select s from SOCIETE s where NomSoc='Cauchemar en cuisine'), '2020-05-01', 1, 'achat');
 
+ insert into ACTION values ((select p from PERSONNE p where Prenom='Tom'), (select s from SOCIETE s where NomSoc='Mairie'), '2020-05-01', 10, 'vente');
 
 
 
@@ -278,6 +327,8 @@ $$ LANGUAGE 'plpgsql';
  insert into ACTION values ((select p from PERSONNE p where Prenom='Méli'), (select s from SOCIETE s where NomSoc='Mairie'), '2024-05-05', 5, 'vente');
  insert into ACTION values ((select p from PERSONNE p where Prenom='Méli'), (select s from SOCIETE s where NomSoc='Mairie'), '2024-05-05', 5, 'achat');
 
+ insert into ACTION values ((select p from PERSONNE p where Prenom='Méli'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2020-05-01', 4, 'achat');
+ insert into ACTION values ((select p from PERSONNE p where Prenom='Méli'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2020-05-01', 4, 'vente');
 
 
 -- Mélo
@@ -305,4 +356,5 @@ select affiche_vente_sup_achat(1);
 select nb_salaries_jamais_action_2();
 
 select liste_actionnaires_salaries();
+
 
