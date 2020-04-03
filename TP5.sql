@@ -1,12 +1,14 @@
+drop function if exists plus_grand_nb_confondues cascade;
+
 drop function if exists annee_plus_salaries_actionnaires cascade;
 
 drop function if exists pas_plus_de_3 cascade;
 
-drop function if exists liste_actionnaires_salaries cascade;
+drop function if exists liste_actionnaires_tous_salaries cascade;
 
 drop function if exists nb_salaries_jamais_action_2 cascade;
 
-drop function if exists affiche_vente_sup_achat cascade;
+drop function if exists affiche_vente_sup_achat(integer) cascade;
 
 drop function if exists interdire_insertion cascade;
 
@@ -14,16 +16,14 @@ drop function if exists ajout cascade;
 
 -- drop trigger insertion_action cascade;
 
-drop function if exists trace_tes_morts cascade;
-
 drop table if exists HISTO_An_ACTIONNAIRE;
 drop table if exists ACTION;
 drop table if exists SALARIE;
 drop table if exists SOCIETE;
 drop table if exists PERSONNE;
 
-drop type if exists t_societe_type;
-drop type if exists t_personne_type;
+drop type if exists t_societe_type cascade;
+drop type if exists t_personne_type cascade;
 
 
 
@@ -99,28 +99,8 @@ insert into SALARIE values ((select p from PERSONNE p where Prenom='Thibou'), (s
 	select * from PERSONNE;
 	select * from SOCIETE;
 	select * from SALARIE;
-
-
-
-
-
-
--- ses grands morts 
-
-
-
-
-CREATE FUNCTION trace_tes_morts() RETURNS TRIGGER AS $$
-BEGIN
-IF New.typeAct='achat' THEN
-	 	RAISE NOTICE 'action achat comptabilisée';
-ELSE	
-		RAISE NOTICE 'action vente comptabilisée';
-END IF;
-RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
+	SELECT * FROM ACTION;
+	select * from HISTO_An_ACTIONNAIRE;
 
 
 
@@ -254,9 +234,15 @@ $$ LANGUAGE 'plpgsql';
 -- question 7
 
 
-create function liste_actionnaires_salaries() RETURNS TABLE(nomSoc varchar(30), Annee int) AS $$ 
+create function liste_actionnaires_tous_salaries() RETURNS TABLE(nomSoc varchar(30), Annee int) AS $$ 
 BEGIN
-	RETURN QUERY (SELECT DISTINCT (s.SOCIETE).NomSoc, h.Annee from HISTO_An_ACTIONNAIRE h INNER JOIN SALARIE s on (h.SOCIETE = s.SOCIETE and h.PERSONNE = s.PERSONNE));
+	RETURN QUERY (SELECT DISTINCT societe_actionnee1, annee1 from 
+(		(SELECT DISTINCT (h.SOCIETE).NomSoc as societe_actionnee1, h.Annee as annee1, COUNT(h.PERSONNE) as compteur1  from 
+			HISTO_An_ACTIONNAIRE h INNER JOIN SALARIE s on (h.PERSONNE = s.PERSONNE)  GROUP BY (h.SOCIETE, h.Annee)		) as t1
+INNER JOIN 
+		(SELECT DISTINCT (h.SOCIETE).NomSoc as societe_actionnee2, h.annee as annee2, COUNT(h.PERSONNE) as compteur2  
+			from HISTO_An_ACTIONNAIRE h INNER JOIN SALARIE s on (h.SOCIETE = s.SOCIETE and h.PERSONNE = s.PERSONNE) GROUP BY (h.SOCIETE, h.Annee)	) as t2 
+on t1.societe_actionnee1 = t2.societe_actionnee2 and t1.Annee1 = t2.Annee2 and t1.compteur1 = t2.compteur2	) as t3);
 END;
 $$ LANGUAGE 'plpgsql';
 
@@ -282,19 +268,14 @@ CREATE
 			BEGIN	
 					nb_salaries_dans_annee_max = 0;
 					annee_max = 0;
-					RAISE NOTICE 'annee max : %', annee_max;
 					FOR i IN curseur
 					LOOP
-						RAISE NOTICE 'annee i : %', i.Annee;						
 						nb_salaries_dans_annee_courant := (SELECT COUNT(Annee) FROM (select DISTINCT * from HISTO_An_ACTIONNAIRE h natural join SALARIE s where  (h.SOCIETE).CodeSoc = CodeSoc   ORDER BY Annee) as t1 WHERE Annee = i.Annee);
-						RAISE NOTICE 'annee i : %', i.Annee;						
 						IF nb_salaries_dans_annee_courant > nb_salaries_dans_annee_max
 						THEN
 							nb_salaries_dans_annee_max := nb_salaries_dans_annee_courant;
 							annee_max := i.Annee;
-							RAISE NOTICE 'annee max : %', annee_max;
 						END IF;
-						RAISE NOTICE 'annee max : %', annee_max;
 					END LOOP;
 			
 					return annee_max;	
@@ -306,10 +287,14 @@ CREATE
 
 
 
+-- question 9
 
-
-
-
+ 
+create function plus_grand_nb_confondues(annee_arg int) RETURNS TABLE(individu t_personne_type, somme_actions bigint) AS $$ 
+BEGIN
+	RETURN QUERY (SELECT *  FROM (SELECT h.PERSONNE, SUM(h.NbrActTotal) as oh  from HISTO_An_ACTIONNAIRE h WHERE (h.Annee = 2020) GROUP BY h.PERSONNE) as t2 where oh = (SELECT MAX(oh) FROM  (SELECT SUM(h.NbrActTotal) as oh from HISTO_An_ACTIONNAIRE h WHERE (h.Annee = 2020) GROUP BY h.PERSONNE) as t3));
+END;
+$$ LANGUAGE 'plpgsql';
 
 
 
@@ -317,7 +302,6 @@ CREATE
 
 
 -- question 10
-
 
 
 
@@ -346,6 +330,8 @@ FOR EACH ROW execute procedure pas_plus_de_3();
 
 
 
+-- INSERTIONS
+
 -- Tom Nook
 
  insert into ACTION values ((select p from PERSONNE p where Prenom='Tom'), (select s from SOCIETE s where NomSoc='Mairie'), '2024-05-01', 3, 'achat');
@@ -359,7 +345,7 @@ FOR EACH ROW execute procedure pas_plus_de_3();
 
 -- Méli
 
- insert into ACTION values ((select p from PERSONNE p where Prenom='Méli'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2020-05-01', 2, 'achat');
+ insert into ACTION values ((select p from PERSONNE p where Prenom='Méli'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2020-05-01', 8, 'achat');
  insert into ACTION values ((select p from PERSONNE p where Prenom='Méli'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2020-05-01', 2, 'vente');
  insert into ACTION values ((select p from PERSONNE p where Prenom='Méli'), (select s from SOCIETE s where NomSoc='Mairie'), '2024-05-05', 5, 'vente');
  insert into ACTION values ((select p from PERSONNE p where Prenom='Méli'), (select s from SOCIETE s where NomSoc='Mairie'), '2024-05-05', 5, 'achat');
@@ -386,29 +372,28 @@ FOR EACH ROW execute procedure pas_plus_de_3();
  insert into ACTION values ((select p from PERSONNE p where Prenom='Thibou'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2021-12-08', 1, 'achat');
 
 
-
-
 UPDATE ACTION a set dateAct = '2019-09-17' where (a.PERSONNE).Prenom = 'Mélo';
 
-select * from ACTION;
-select * from HISTO_An_ACTIONNAIRE;
+
+-- test
 
 
- --delete from ACTION where NbrAct = 2;
- --delete from HISTO_An_ACTIONNAIRE where annee = 2020;
+	select * from PERSONNE;
+	select * from SOCIETE;
+	select * from SALARIE;
+	select * from ACTION;
+	select * from HISTO_An_ACTIONNAIRE;
 
 select affiche_vente_sup_achat(1);
 
-
 select nb_salaries_jamais_action_2();
 
-select liste_actionnaires_salaries();
-
-
-select * from HISTO_An_ACTIONNAIRE ORDER BY SOCIETE, Annee;
+select liste_actionnaires_tous_salaries();
 
 select annee_plus_salaries_actionnaires(2);
 
+select plus_grand_nb_confondues(2020);
 
 
-SELECT DISTINCT * from HISTO_An_ACTIONNAIRE h INNER JOIN SALARIE s on (h.SOCIETE = s.SOCIETE and h.PERSONNE = s.PERSONNE) order by annee;
+
+
