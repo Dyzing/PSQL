@@ -1,3 +1,5 @@
+drop function if exists annee_plus_salaries_actionnaires cascade;
+
 drop function if exists pas_plus_de_3 cascade;
 
 drop function if exists liste_actionnaires_salaries cascade;
@@ -79,6 +81,7 @@ insert into PERSONNE values (1001, 'Nook', 'Tom', 'Male', '2020-01-01');
 insert into PERSONNE values (1002, 'Nook', 'Méli', 'Male', '2020-04-01');
 insert into PERSONNE values (1003, 'Nook', 'Mélo', 'Male', '2020-04-01');
 insert into PERSONNE values (1004, 'Etchebest', 'Philippe', 'Homme', '1966-12-02');
+insert into PERSONNE values (1005, 'Hou-Hou', 'Thibou', 'Male', '2005-08-26');
 
 
 insert into SOCIETE values (1, 'Mairie', 'Niort-en-Mer');
@@ -89,6 +92,7 @@ insert into SALARIE values ((select p from PERSONNE p where Prenom='Tom'), (sele
 insert into SALARIE values ((select p from PERSONNE p where Prenom='Méli'), (select s from SOCIETE s where NomSoc='Nook Shop'), 700);
 insert into SALARIE values ((select p from PERSONNE p where Prenom='Mélo'), (select s from SOCIETE s where NomSoc='Nook Shop'), 800);
 insert into SALARIE values ((select p from PERSONNE p where Prenom='Philippe'), (select s from SOCIETE s where NomSoc='Cauchemar en cuisine'), 8000);
+insert into SALARIE values ((select p from PERSONNE p where Prenom='Thibou'), (select s from SOCIETE s where NomSoc='Nook Shop'), 300);
 
 
 
@@ -264,7 +268,39 @@ $$ LANGUAGE 'plpgsql';
 -- question 8
 
 
-
+CREATE
+	FUNCTION annee_plus_salaries_actionnaires(CodeSoc int) 
+		RETURNS	int
+			AS
+		$$
+		
+			DECLARE curseur CURSOR FOR
+					SELECT Annee FROM (select DISTINCT * from HISTO_An_ACTIONNAIRE h natural join SALARIE s where  (h.SOCIETE).CodeSoc = CodeSoc   ORDER BY Annee) as t1;
+					nb_salaries_dans_annee_max int;
+					nb_salaries_dans_annee_courant int;
+					annee_max int;
+			BEGIN	
+					nb_salaries_dans_annee_max = 0;
+					annee_max = 0;
+					RAISE NOTICE 'annee max : %', annee_max;
+					FOR i IN curseur
+					LOOP
+						RAISE NOTICE 'annee i : %', i.Annee;						
+						nb_salaries_dans_annee_courant := (SELECT COUNT(Annee) FROM (select DISTINCT * from HISTO_An_ACTIONNAIRE h natural join SALARIE s where  (h.SOCIETE).CodeSoc = CodeSoc   ORDER BY Annee) as t1 WHERE Annee = i.Annee);
+						RAISE NOTICE 'annee i : %', i.Annee;						
+						IF nb_salaries_dans_annee_courant > nb_salaries_dans_annee_max
+						THEN
+							nb_salaries_dans_annee_max := nb_salaries_dans_annee_courant;
+							annee_max := i.Annee;
+							RAISE NOTICE 'annee max : %', annee_max;
+						END IF;
+						RAISE NOTICE 'annee max : %', annee_max;
+					END LOOP;
+			
+					return annee_max;	
+			END;		
+		
+		$$ LANGUAGE plpgsql;
 
 
 
@@ -312,9 +348,10 @@ FOR EACH ROW execute procedure pas_plus_de_3();
 
 -- Tom Nook
 
- insert into ACTION values ((select p from PERSONNE p where Prenom='Tom'), (select s from SOCIETE s where NomSoc='Mairie'), '2020-05-01', 3, 'achat');
+ insert into ACTION values ((select p from PERSONNE p where Prenom='Tom'), (select s from SOCIETE s where NomSoc='Mairie'), '2024-05-01', 3, 'achat');
  insert into ACTION values ((select p from PERSONNE p where Prenom='Tom'), (select s from SOCIETE s where NomSoc='Mairie'), '2020-05-01', 2, 'vente');
- insert into ACTION values ((select p from PERSONNE p where Prenom='Tom'), (select s from SOCIETE s where NomSoc='Cauchemar en cuisine'), '2020-05-01', 1, 'achat');
+ insert into ACTION values ((select p from PERSONNE p where Prenom='Tom'), (select s from SOCIETE s where NomSoc='Cauchemar en cuisine'), '2022-05-01', 1, 'achat');
+ insert into ACTION values ((select p from PERSONNE p where Prenom='Tom'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2020-05-01', 2, 'vente');
 
  insert into ACTION values ((select p from PERSONNE p where Prenom='Tom'), (select s from SOCIETE s where NomSoc='Mairie'), '2020-05-01', 10, 'vente');
 
@@ -330,13 +367,23 @@ FOR EACH ROW execute procedure pas_plus_de_3();
  insert into ACTION values ((select p from PERSONNE p where Prenom='Méli'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2020-05-01', 4, 'achat');
  insert into ACTION values ((select p from PERSONNE p where Prenom='Méli'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2020-05-01', 4, 'vente');
 
+ insert into ACTION values ((select p from PERSONNE p where Prenom='Méli'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2021-05-01', 4, 'achat');
+ insert into ACTION values ((select p from PERSONNE p where Prenom='Méli'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2021-05-01', 4, 'vente');
+
 
 -- Mélo
 
- insert into ACTION values ((select p from PERSONNE p where Prenom='Mélo'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2020-05-05', 2, 'achat');
+ insert into ACTION values ((select p from PERSONNE p where Prenom='Mélo'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2020-05-01', 2, 'achat');
  insert into ACTION values ((select p from PERSONNE p where Prenom='Mélo'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2019-02-01', 2, 'achat');
  insert into ACTION values ((select p from PERSONNE p where Prenom='Mélo'), (select s from SOCIETE s where NomSoc='Mairie'), '2022-05-05', 6, 'vente');
  insert into ACTION values ((select p from PERSONNE p where Prenom='Mélo'), (select s from SOCIETE s where NomSoc='Mairie'), '2022-05-05', 3, 'achat');
+
+ insert into ACTION values ((select p from PERSONNE p where Prenom='Mélo'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2021-09-08', 3, 'vente');
+
+-- Thibou
+
+ insert into ACTION values ((select p from PERSONNE p where Prenom='Thibou'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2021-09-08', 5, 'vente');
+ insert into ACTION values ((select p from PERSONNE p where Prenom='Thibou'), (select s from SOCIETE s where NomSoc='Nook Shop'), '2021-12-08', 1, 'achat');
 
 
 
@@ -358,3 +405,10 @@ select nb_salaries_jamais_action_2();
 select liste_actionnaires_salaries();
 
 
+select * from HISTO_An_ACTIONNAIRE ORDER BY SOCIETE, Annee;
+
+select annee_plus_salaries_actionnaires(2);
+
+
+
+SELECT DISTINCT * from HISTO_An_ACTIONNAIRE h INNER JOIN SALARIE s on (h.SOCIETE = s.SOCIETE and h.PERSONNE = s.PERSONNE) order by annee;
